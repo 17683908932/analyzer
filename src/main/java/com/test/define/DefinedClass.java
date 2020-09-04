@@ -1,46 +1,59 @@
 package com.test.define;
 
+import com.test.utils.CollectionUtil;
+
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.List;
+import java.lang.reflect.TypeVariable;
+import java.util.*;
 
 @SuppressWarnings("all")
 public class DefinedClass {
+	private final static Map<Class, DefinedClass> cacheDefined = new HashMap<>();
+
 	private Class clazz;
+	//如果有 泛型数组
+	private TypeVariable[] typeVariables;
 
-	private List<DefinedField> fields;
+	private Map<Field, DefinedField> fields;
 
-	private List<DefinedMethod> methods;
+	private Map<Method, DefinedMethod> methods;
 
-	private Annotation[] annotations;
+	public static DefinedClass getDefinedClazz(Class clazz) {
+		DefinedClass definedClass = cacheDefined.get(clazz);
+		if (definedClass == null) {
+			cacheDefined.put(clazz, (definedClass = new DefinedClass(clazz)));
+		}
+		return definedClass;
+	}
 
-	public DefinedClass(Class clazz, boolean ignoreFields, boolean ignoreMethods) {
+	public DefinedClass(Class clazz) {
 		this.clazz = clazz;
-		if (!ignoreMethods) {
-			setDefinedMethod();
+
+		typeVariables = clazz.getTypeParameters();
+		if (typeVariables == null || typeVariables.length == 0) {
+			typeVariables = null;
 		}
-		if (!ignoreFields) {
-			setDefinedField();
-		}
-		annotations = clazz.getAnnotations();
+
+		setDefinedMethod();
+		setDefinedField();
 	}
 
 	protected final void setDefinedMethod() {
 		Method[] methodArray = clazz.getDeclaredMethods();
-		List<DefinedMethod> definedMethods = new ArrayList<>(methodArray.length);
+		Map<Method, DefinedMethod> definedMethods = new HashMap<>(methodArray.length);
 		for (int i = 0; i < methodArray.length; i++) {
-			definedMethods.add(new DefinedMethod(this, methodArray[i]));
+			definedMethods.put(methodArray[i], new DefinedMethod(this, methodArray[i]));
 		}
 		methods = definedMethods;
 	}
 
 	protected final void setDefinedField() {
 		Field[] fieldArray = clazz.getDeclaredFields();
-		List<DefinedField> definedFields = new ArrayList<>(fieldArray.length);
+		Map<Field, DefinedField> definedFields = new HashMap<>(fieldArray.length);
 		for (int i = 0; i < fieldArray.length; i++) {
-			definedFields.add(new DefinedField(this, fieldArray[i]));
+			definedFields.put(fieldArray[i], new DefinedField(this, fieldArray[i]));
 		}
 		fields = definedFields;
 	}
@@ -49,15 +62,49 @@ public class DefinedClass {
 		return clazz;
 	}
 
-	public List<DefinedField> getFields() {
-		return fields;
+	public Map<Field, DefinedField> getFields() {
+		if (fields == null) { return null; }
+		return Collections.unmodifiableMap(fields);
 	}
 
-	public List<DefinedMethod> getMethods() {
-		return methods;
+	public Map<Method, DefinedMethod> getMethods() {
+		if (methods == null) { return null; }
+		return Collections.unmodifiableMap(methods);
 	}
 
-	public Annotation[] getAnnotations() {
-		return annotations;
+	public TypeVariable[] getTypeVariables() {
+		return typeVariables;
+	}
+
+	public boolean isGenericClass() {
+		return !CollectionUtil.isEmpty(typeVariables);
+	}
+
+	public<T extends Annotation> T getAnnotations(Class<T> annotation) {
+		return (T) clazz.getDeclaredAnnotation(annotation);
+	}
+
+	public boolean hasAnnotations(Class annotation) {
+		return clazz.getDeclaredAnnotation(annotation) != null;
+	}
+
+	private void unionMethodField() {
+		if (CollectionUtil.isEmpty(methods) || CollectionUtil.isEmpty(fields)) { return; }
+		for (Map.Entry<Field, DefinedField> fieldEntry : fields.entrySet()) {
+			DefinedField definedField = fieldEntry.getValue();
+			Method getter = definedField.getGetter();
+			Method setter = definedField.getSetter();
+			DefinedMethod definedGetterMethod, definedSetterMethod;
+			if (getter != null && (definedGetterMethod = methods.get(getter)) != null) {
+				definedGetterMethod.setGetter(true);
+				definedGetterMethod.setGetterSetterField(definedField);
+				definedField.setGetterMethod(definedGetterMethod);
+			}
+			if (setter != null && (definedSetterMethod = methods.get(setter)) != null) {
+				definedSetterMethod.setSetter(true);
+				definedSetterMethod.setGetterSetterField(definedField);
+				definedField.setSetterMethod(definedSetterMethod);
+			}
+		}
 	}
 }

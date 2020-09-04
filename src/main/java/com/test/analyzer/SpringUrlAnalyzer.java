@@ -1,10 +1,8 @@
 package com.test.analyzer;
 
 import com.alibaba.fastjson.JSONObject;
-import com.test.define.DefinedClass;
-import com.test.define.DefinedMethod;
-import com.test.define.DefinedRandom;
-import com.test.define.DefinedRequestUrl;
+import com.test.define.*;
+import com.test.params.RequestParamsParser;
 import com.test.utils.CollectionUtil;
 import com.test.utils.FileUtil;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +23,7 @@ import java.util.Map;
 public class SpringUrlAnalyzer extends ClassAnalyzer {
 
 	private String url;
+	private RequestParamsParser paramsParser;
 	private List<DefinedRequestUrl> requestUrls = new ArrayList<>();
 
 	@Override
@@ -67,53 +66,60 @@ public class SpringUrlAnalyzer extends ClassAnalyzer {
 	}
 
 	protected void classToRequestUrls(DefinedClass definedClass) {
-		Class clazz = definedClass.getClazz();
-		DefinedRequestUrl definedRequestUrl = classDefinedUrl(clazz);
+		DefinedRequestUrl definedRequestUrl = classDefinedUrl(definedClass);
 		if (definedRequestUrl != null) {
-			Method[] mds = clazz.getDeclaredMethods();
-			for (int i = 0; i < mds.length; i++) {
-				methodDefinedUrl(definedRequestUrl, mds[i]);
+			Map<Method, DefinedMethod> methodMap = definedClass.getMethods();
+			if (!CollectionUtil.isEmpty(methodMap)) {
+				for (Map.Entry<Method, DefinedMethod> methodEntry : methodMap.entrySet()) {
+					DefinedMethod definedMethod = methodEntry.getValue();
+					methodDefinedUrl(definedRequestUrl, definedMethod);
+				}
 			}
 		}
 	}
 
-	protected DefinedRequestUrl methodDefinedUrl(DefinedRequestUrl definedUrl, Method method) {
+	protected DefinedRequestUrl methodDefinedUrl(DefinedRequestUrl definedUrl, DefinedMethod method) {
 		DefinedRequestUrl methodDefinedUrl = null;
 		RequestMapping methodMapping;
 		GetMapping methodGetMapping;
 		PostMapping methodPostMapping;
-		if ((methodMapping = method.getDeclaredAnnotation(RequestMapping.class)) != null) {
+		if ((methodMapping = method.getAnnotations(RequestMapping.class)) != null) {
 			methodDefinedUrl = definedUrl.clone();
 			RequestMethod[] requestMethods = methodMapping.method();
-			if (requestMethods != null && requestMethods.length > 0) {
+			if (!CollectionUtil.isEmpty(requestMethods)) {
 				String[] methods = new String[requestMethods.length];
 				for (int i = 0; i < requestMethods.length; i++) {
 					methods[i] = requestMethods[i].name();
 				}
 				methodDefinedUrl.setMethod(methods);
+			} else {
+				methodDefinedUrl.setMethod(new String[]{"POST"});
 			}
 			methodDefinedUrl.setSecondDomain(methodMapping.value());
-		} else if ((methodGetMapping = method.getDeclaredAnnotation(GetMapping.class)) != null) {
+		} else if ((methodGetMapping = method.getAnnotations(GetMapping.class)) != null) {
 			methodDefinedUrl = definedUrl.clone();
 			methodDefinedUrl.setMethod(new String[]{"GET"});
 			methodDefinedUrl.setSecondDomain(methodGetMapping.value());
-		} else if ((methodPostMapping = method.getDeclaredAnnotation(PostMapping.class)) != null) {
+		} else if ((methodPostMapping = method.getAnnotations(PostMapping.class)) != null) {
 			methodDefinedUrl = definedUrl.clone();
 			methodDefinedUrl.setMethod(new String[]{"POST"});
 			methodDefinedUrl.setSecondDomain(methodPostMapping.value());
 		}
+
 		if (methodDefinedUrl != null) {
 			Parameter[] parameters = method.getParameters();
 			if (parameters != null && parameters.length > 0) {
+				List<DefinedRequestParams> definedRequestParams = paramsParser.methodParseParams(method);
+
 				if (parameters.length == 1 && parameters[0].getDeclaredAnnotation(RequestBody.class) != null) {
-					paramsAppend(methodDefinedUrl, parameters[0], true);
+					methodDefinedUrl.setParams(DefinedRequestParams.parseJsonString(definedRequestParams.get(0)));
 				} else {
-					for (int i = 0; i < parameters.length; i++) {
-						Parameter parameter = parameters[i];
-						paramsAppend(methodDefinedUrl, parameter, false);
+					if (definedRequestParams.size() == 1) {
+						methodDefinedUrl.setParams(DefinedRequestParams.parseFormString(definedRequestParams.get(0)));
+					} else {
+						methodDefinedUrl.setParams(DefinedRequestParams.parseFormString(definedRequestParams));
 					}
 				}
-
 			}
 			requestUrls.add(methodDefinedUrl);
 			return methodDefinedUrl;
@@ -121,11 +127,11 @@ public class SpringUrlAnalyzer extends ClassAnalyzer {
 		return null;
 	}
 
-	protected DefinedRequestUrl classDefinedUrl(Class clazz) {
-		if (clazz.getDeclaredAnnotation(RestController.class) != null) {
+	protected DefinedRequestUrl classDefinedUrl(DefinedClass definedClass) {
+		if (definedClass.hasAnnotations(RestController.class)) {
 			DefinedRequestUrl definedUrl = new DefinedRequestUrl();
 			definedUrl.setUrl(url);
-			RequestMapping classMapping = (RequestMapping) clazz.getDeclaredAnnotation(RequestMapping.class);
+			RequestMapping classMapping = (RequestMapping) definedClass.getAnnotations(RequestMapping.class);
 			if (classMapping != null) {
 				definedUrl.setFirstDomain(classMapping.value());
 			}
@@ -191,5 +197,6 @@ public class SpringUrlAnalyzer extends ClassAnalyzer {
 
 	public SpringUrlAnalyzer(String url) {
 		this.url = url;
+		paramsParser = new RequestParamsParser();
 	}
 }

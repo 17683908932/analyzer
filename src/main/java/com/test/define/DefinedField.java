@@ -1,8 +1,12 @@
 package com.test.define;
 
+import com.test.enums.GenericTypeEnum;
+import com.test.utils.CollectionUtil;
+
+import static com.test.enums.GenericTypeEnum.*;
+
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
+import java.lang.reflect.*;
 
 @SuppressWarnings("all")
 public class DefinedField {
@@ -13,13 +17,22 @@ public class DefinedField {
 
 	private String fieldName;
 
+	//非泛型
 	private Class fieldClass;
+	//泛型类型T 或 E这种
+	private TypeVariable[] fieldTypeVariables;
+	//对应类里面的泛型数组的位置
+	private Integer[] genericTypeIndexes;
+	//泛型 Map<K, V>
+	private ParameterizedType fieldParameterizedType;
+	//类型
+	private GenericTypeEnum genericType = type_Class;
 
 	private DefinedMethod getterMethod;
+	private Method getter;
 
 	private DefinedMethod setterMethod;
-
-	private Annotation[] annotations;
+	private Method setter;
 
 	public DefinedField(DefinedClass definedClass, Field field) {
 		if (definedClass == null || field == null) {
@@ -29,14 +42,27 @@ public class DefinedField {
 		this.field = field;
 
 		this.fieldName = field.getName();
-		this.fieldClass = field.getDeclaringClass();
-		this.annotations = field.getDeclaredAnnotations();
+		Type type = field.getGenericType();
+		if (type instanceof TypeVariable) {
+			TypeVariable typeVariable = (TypeVariable) type;
+			genericType = type_TypeVariable;
+			fieldTypeVariables = new TypeVariable[]{typeVariable};
+			fieldClass = (Class) typeVariable.getBounds()[0];
+		} else if (type instanceof ParameterizedType) {
+			genericType = type_ParameterizedType;
+			fieldParameterizedType = (ParameterizedType) type;
+			fieldClass = (Class) fieldParameterizedType.getRawType();
+			Type[] types = fieldParameterizedType.getActualTypeArguments();
+			fieldTypeVariables = new TypeVariable[types.length];
+			for (int i = 0; i < types.length; i++) {
+				fieldTypeVariables[i] = (TypeVariable) (types[i]);
+			}
+		} else if (type instanceof Class){
+			fieldClass = (Class) type;
+		}
+		markTypeVariableIndex();
 		setGetterMethod();
 		setSetterMethod();
-	}
-
-	public String getFieldName() {
-		return fieldName;
 	}
 
 	public DefinedClass getDefinedClass() {
@@ -47,20 +73,73 @@ public class DefinedField {
 		return field;
 	}
 
+	public GenericTypeEnum getGenericType() {
+		return genericType;
+	}
+
+	public String getFieldName() {
+		return fieldName;
+	}
+
 	public Class getFieldClass() {
 		return fieldClass;
 	}
 
-	public DefinedMethod getGetter() {
+	public ParameterizedType getFieldGenericType() {
+		return fieldParameterizedType;
+	}
+
+	public Integer[] getGenericTypeIndexes() {
+		return genericTypeIndexes;
+	}
+
+	public void setGetterMethod(DefinedMethod getterMethod) {
+		this.getterMethod = getterMethod;
+	}
+
+	public void setSetterMethod(DefinedMethod setterMethod) {
+		this.setterMethod = setterMethod;
+	}
+
+	public DefinedMethod getGetterMethod() {
 		return getterMethod;
 	}
 
-	public DefinedMethod getSetter() {
+	public Method getGetter() {
+		return getter;
+	}
+
+	public DefinedMethod getSetterMethod() {
 		return setterMethod;
 	}
 
-	public Annotation[] getAnnotations() {
-		return annotations;
+	public Method getSetter() {
+		return setter;
+	}
+
+	public<T extends Annotation> T getAnnotations(Class<T> annotation) {
+		return field.getDeclaredAnnotation(annotation);
+	}
+
+	public boolean hasAnnotations(Class annotation) {
+		return field.getDeclaredAnnotation(annotation) != null;
+	}
+
+	private void markTypeVariableIndex() {
+		TypeVariable[] classTypeVariables = definedClass.getTypeVariables();
+
+		if (CollectionUtil.isEmpty(classTypeVariables)
+				|| CollectionUtil.isEmpty(fieldTypeVariables)) { return; }
+
+		genericTypeIndexes = new Integer[fieldTypeVariables.length];
+		for (int i = 0; i < fieldTypeVariables.length; i++) {
+			TypeVariable typeVariable = fieldTypeVariables[i];
+			for (int ci = 0; ci < classTypeVariables.length; ci++) {
+				if (typeVariable == classTypeVariables[ci]) {
+					genericTypeIndexes[i] = ci;
+				}
+			}
+		}
 	}
 
 	private void setGetterMethod() {
@@ -70,19 +149,9 @@ public class DefinedField {
 		} else {
 			getterMethodName = "get"+Character.toUpperCase(fieldName.charAt(0));
 		}
-		if (definedClass.getMethods() == null) {
-			try {
-				Method method = definedClass.getClazz().getDeclaredMethod(getterMethodName, null);
-				getterMethod = new DefinedMethod(definedClass, method);
-			} catch (NoSuchMethodException e) {}
-		} else {
-			for (DefinedMethod definedMethod : definedClass.getMethods()) {
-				if (definedMethod.getMethodName().equals(getterMethodName)) {
-					getterMethod = definedMethod;
-					return;
-				}
-			}
-		}
+		try {
+			getter = definedClass.getClazz().getDeclaredMethod(getterMethodName, null);
+		} catch (NoSuchMethodException e) {}
 
 	}
 
@@ -93,19 +162,9 @@ public class DefinedField {
 		} else {
 			setterMethodName = "set"+Character.toUpperCase(fieldName.charAt(0));
 		}
-		if (definedClass.getMethods() == null) {
-			try {
-				Method method = definedClass.getClazz().getDeclaredMethod(setterMethodName, fieldClass);
-				setterMethod = new DefinedMethod(definedClass, method);
-			} catch (NoSuchMethodException e) {}
-		} else {
-			for (DefinedMethod definedMethod : definedClass.getMethods()) {
-				if (definedMethod.getMethodName().equals(setterMethodName)) {
-					setterMethod = definedMethod;
-					return;
-				}
-			}
-		}
+		try {
+			setter = definedClass.getClazz().getDeclaredMethod(setterMethodName, fieldClass == null? Object.class: fieldClass);
+		} catch (NoSuchMethodException e) {}
 
 	}
 }

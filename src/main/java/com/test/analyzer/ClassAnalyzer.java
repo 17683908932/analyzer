@@ -26,7 +26,7 @@ public abstract class ClassAnalyzer implements Analyzer {
 				if (file.getName().endsWith(".class")) {
 					try {
 						Class clazz = Class.forName(packageName+"."+fileNameRemoveSuffix(file.getName()));
-						classes.add(new DefinedClass(clazz, false, false));
+						classes.add(DefinedClass.getDefinedClazz(clazz));
 					} catch (ClassNotFoundException e) {
 						continue;
 					}
