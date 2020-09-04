@@ -72,7 +72,12 @@ public class SpringUrlAnalyzer extends ClassAnalyzer {
 			if (!CollectionUtil.isEmpty(methodMap)) {
 				for (Map.Entry<Method, DefinedMethod> methodEntry : methodMap.entrySet()) {
 					DefinedMethod definedMethod = methodEntry.getValue();
-					methodDefinedUrl(definedRequestUrl, definedMethod);
+					try {
+						methodDefinedUrl(definedRequestUrl, definedMethod);
+					} catch (Exception e) {
+						System.out.println("error: method:"+definedMethod.toString());
+						e.printStackTrace();
+					}
 				}
 			}
 		}

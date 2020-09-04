@@ -84,17 +84,14 @@ public class RequestParamsParser {
 		if (ClassSign.isArray(type)) {
 			actualClass = type.getComponentType();
 			requestParams.setArray(true);
-		}
-		if (ClassSign.isCollection(type)) {
+		} else if (ClassSign.isCollection(type)) {
 			if (CollectionUtil.isEmpty(genericTypes)) {
 				actualClass = Object.class;
 			} else {
 				actualClass = genericTypes[0];
 			}
 			requestParams.setArray(true);
-		}
-
-		if (ClassSign.needDepth(actualClass)) {
+		} else if (ClassSign.needDepth(actualClass)) {
 			DefinedClass definedClass = DefinedClass.getDefinedClazz(actualClass);
 			Map<Field, DefinedField> fieldMap = definedClass.getFields();
 			if (CollectionUtil.isEmpty(fieldMap)) { return parent; }
@@ -117,7 +114,7 @@ public class RequestParamsParser {
 						} break;
 						case type_TypeVariable: {
 							parseParameterNameGeneric(requestParams, definedField, definedClass, genericTypes);
-						};
+						} break;
 						default: {
 							System.out.println("error: GenericType::"+definedField.getGenericType());
 						} break;
@@ -144,6 +141,6 @@ public class RequestParamsParser {
 				}
 			}
 		}
-		parseParameterName(requestParams, definedField.getFieldClass(), definedField.getFieldName(), fieldTypes);
+		parseParameterName(requestParams, definedField.fieldTypeWhenGeneric(fieldTypes), definedField.getFieldName(), fieldTypes);
 	}
 }

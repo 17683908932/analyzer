@@ -95,6 +95,7 @@ public class DefinedRequestParams {
 		}
 		if (CollectionUtil.isEmpty(params.paramValues)) {
 			parseFormString(params, builder, null);
+			builder.deleteCharAt(builder.length()-1);
 			return builder.toString();
 		}
 		Iterator<DefinedRequestParams> iter = params.paramValues.iterator();
@@ -120,9 +121,9 @@ public class DefinedRequestParams {
 	private static void parseJsonString(DefinedRequestParams params, JSONObject json) {
 		if (CollectionUtil.isEmpty(params.paramValues)) {
 			if (params.array) {
-				json.put(params.param, new Object[0]);
+				json.put(params.param, new String[]{"null","null"});
 			} else {
-				json.put(params.param, null);
+				json.put(params.param, "null");
 			}
 			return ;
 		}

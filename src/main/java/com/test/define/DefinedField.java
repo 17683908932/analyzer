@@ -21,6 +21,8 @@ public class DefinedField {
 	private Class fieldClass;
 	//泛型类型T 或 E这种
 	private TypeVariable[] fieldTypeVariables;
+	//默认类型Map<string, V>这种
+	private Class[] typeVariableDefault;
 	//对应类里面的泛型数组的位置
 	private Integer[] genericTypeIndexes;
 	//泛型 Map<K, V>
@@ -47,6 +49,7 @@ public class DefinedField {
 			TypeVariable typeVariable = (TypeVariable) type;
 			genericType = type_TypeVariable;
 			fieldTypeVariables = new TypeVariable[]{typeVariable};
+			typeVariableDefault = new Class[]{(Class) typeVariable.getBounds()[0]};
 			fieldClass = (Class) typeVariable.getBounds()[0];
 		} else if (type instanceof ParameterizedType) {
 			genericType = type_ParameterizedType;
@@ -54,8 +57,15 @@ public class DefinedField {
 			fieldClass = (Class) fieldParameterizedType.getRawType();
 			Type[] types = fieldParameterizedType.getActualTypeArguments();
 			fieldTypeVariables = new TypeVariable[types.length];
+			typeVariableDefault = new Class[types.length];
 			for (int i = 0; i < types.length; i++) {
-				fieldTypeVariables[i] = (TypeVariable) (types[i]);
+				if (types[i] instanceof TypeVariable) {
+					TypeVariable typeVariable = (TypeVariable) (types[i]);
+					fieldTypeVariables[i] = typeVariable;
+					typeVariableDefault[i] = (Class) typeVariable.getBounds()[0];
+				} else if (types[i] instanceof Class) {
+					typeVariableDefault[i] = (Class) types[i];
+				}
 			}
 		} else if (type instanceof Class){
 			fieldClass = (Class) type;
@@ -111,6 +121,21 @@ public class DefinedField {
 
 	public DefinedMethod getSetterMethod() {
 		return setterMethod;
+	}
+
+	public Class fieldTypeWhenGeneric(Class[] genericTypes) {
+		boolean getDefault = CollectionUtil.isEmpty(genericTypes);
+		switch (genericType) {
+			case type_Class: return fieldClass;
+			case type_TypeVariable: {
+				if (getDefault) { return typeVariableDefault[0]; }
+				return genericTypes[0];
+			}
+			case type_ParameterizedType: return fieldClass;
+			case type_WildcardType: return fieldClass;
+			case type_GenericArrayType: return fieldClass;
+			default: return fieldClass;
+		}
 	}
 
 	public Method getSetter() {

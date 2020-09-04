@@ -1,10 +1,7 @@
 package com.test.define;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
+import java.lang.reflect.*;
 import java.util.List;
 
 public class DefinedMethod {
@@ -13,6 +10,9 @@ public class DefinedMethod {
 	private String methodName;
 	private Class returnType;
 	private ParameterizedType returnGenericType;
+	private TypeVariable[] returnVariableTypes;
+	private Integer[] typeVariableIndexes;
+	private Class[] typeVariableDefault;
 	private Parameter[] parameters;
 
 	private boolean getter = false;
@@ -26,7 +26,26 @@ public class DefinedMethod {
 		methodName = method.getName();
 		Type type = method.getGenericReturnType();
 		if (type instanceof ParameterizedType) {
-			returnGenericType = (ParameterizedType) type;
+			ParameterizedType parameterizedType = (ParameterizedType) type;
+			returnGenericType = parameterizedType;
+			returnType = (Class) parameterizedType.getRawType();
+			Type[] types = parameterizedType.getActualTypeArguments();
+			typeVariableDefault = new Class[types.length];
+			returnVariableTypes = new TypeVariable[types.length];
+			for (int i = 0; i < types.length; i++) {
+				if (types[i] instanceof Class) {
+					typeVariableDefault[i] = (Class) types[i];
+				} else if (types[i] instanceof TypeVariable) {
+					returnVariableTypes[i] = (TypeVariable) types[i];
+					typeVariableDefault[i] = (Class) returnVariableTypes[i].getBounds()[0];
+				}
+			}
+			returnVoid = false;
+		} else if (type instanceof TypeVariable) {
+			TypeVariable typeVariable = (TypeVariable) type;
+			returnType = (Class) typeVariable.getBounds()[0];
+			returnVariableTypes = new TypeVariable[]{typeVariable};
+			typeVariableDefault = new Class[]{(Class) typeVariable.getBounds()[0]};
 			returnVoid = false;
 		} else {
 			returnType = (Class) type;
@@ -49,6 +68,10 @@ public class DefinedMethod {
 
 	public DefinedClass getDefinedClass() {
 		return definedClass;
+	}
+
+	public TypeVariable[] getReturnVariableTypes() {
+		return returnVariableTypes;
 	}
 
 	public Method getMethod() {
@@ -95,4 +118,14 @@ public class DefinedMethod {
 		return method.getDeclaredAnnotation(annotation) != null;
 	}
 
+	@Override
+	public String toString() {
+		final StringBuilder sb = new StringBuilder("{");
+		sb.append("\"definedClass\": ")
+				.append('\"').append(definedClass.getClazz().getSimpleName()).append('\"');
+		sb.append(", \"methodName\": ")
+				.append('\"').append(methodName).append('\"');
+		sb.append('}');
+		return sb.toString();
+	}
 }

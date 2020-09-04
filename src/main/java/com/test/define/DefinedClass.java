@@ -38,6 +38,7 @@ public class DefinedClass {
 
 		setDefinedMethod();
 		setDefinedField();
+		unionMethodField();
 	}
 
 	protected final void setDefinedMethod() {
